@@ -105,7 +105,7 @@ var NODE_TYPE_ELEMENT = 1;
                 let next=$$watchers[this.index+1];
                 if(next&&next.cureg===this.cureg&&next.elem===this.elem){
                     next.last=this.last;
-                    next.setLast();
+                    return next.setLast();
                 }
             },
             index:$$watchers.length

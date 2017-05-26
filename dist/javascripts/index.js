@@ -153,7 +153,7 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
                 var next = $$watchers[this.index + 1];
                 if (next && next.cureg === this.cureg && next.elem === this.elem) {
                     next.last = this.last;
-                    next.setLast();
+                    return next.setLast();
                 }
             },
             index: $$watchers.length
