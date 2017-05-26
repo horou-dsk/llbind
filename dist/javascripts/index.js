@@ -3,6 +3,20 @@
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
 (function (gb) {
+    function copyObj(obj) {
+        var a = {};
+        for (var k in obj) {
+            if (isArray(obj[k])) {
+                a[k] = [];
+                for (var ki in obj[k]) {
+                    a[k].push(obj[k][ki]);
+                }
+            } else if (obj.hasOwnProperty(k)) {
+                a[k] = _typeof(obj[k]) == 'object' ? copyObj(obj[k]) : obj[k];
+            }
+        }
+        return a;
+    }
     function forOf(o, fn, t, dc) {
         if (dc) o = copyObj(o);
         t = t || this;
@@ -11,6 +25,7 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
         }
     }
 
+    //
     var NODE_TYPE_TEXT = 3;
     var NODE_TYPE_ELEMENT = 1;
 
@@ -112,11 +127,13 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
                 watchers = this.$scope.$$watchers;
             forOf(lmodel_dom, function (v) {
                 var attr = v.getAttribute('lmodel');
+                var wobj = getObject(attr);
+                console.log(wobj);
                 watchers.push({
                     last: v.value = objectGetValue(attr),
                     elem: v,
                     reg: attr,
-                    obj: getObject(attr),
+                    obj: wobj,
                     get: function get() {
                         var obj = this.obj;
                         return obj.obj[obj.key];
@@ -126,13 +143,14 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
                     }
                 });
                 v.addEventListener('input', function () {
-                    objectSetValue(attr, this.value);
+                    wobj.obj[wobj.key] = this.value;
                     var DateTime = Date.now();
                     eachTexts(this);
                     console.log(Date.now() - DateTime);
                 });
             });
         },
+        $lFor: function $lFor() {},
         $scope: {
             $$watchers: []
         },
@@ -144,6 +162,8 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
     };
 
     var $$watchers = lbind.$scope.$$watchers;
+
+    //创建数据监听
     function createWatch(elem, last, reg, cureg, obj, key, get, set) {
         $$watchers.push({
             elem: elem, last: last,
@@ -160,38 +180,19 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
         });
     }
 
+    //监听数据变化
     function eachTexts(elem) {
         var watchers = lbind.$scope.$$watchers,
             resolvetext = void 0;
-        var _iteratorNormalCompletion3 = true;
-        var _didIteratorError3 = false;
-        var _iteratorError3 = undefined;
-
-        try {
-            for (var _iterator3 = watchers[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
-                var w = _step3.value;
-
-                resolvetext = w.get();
-                if (resolvetext !== w.last && elem !== w.elem) {
-                    w.set(resolvetext);
-                }
+        forOf(watchers, function (w) {
+            resolvetext = w.get();
+            if (resolvetext !== w.last && elem !== w.elem) {
+                w.set(resolvetext);
             }
-        } catch (err) {
-            _didIteratorError3 = true;
-            _iteratorError3 = err;
-        } finally {
-            try {
-                if (!_iteratorNormalCompletion3 && _iterator3.return) {
-                    _iterator3.return();
-                }
-            } finally {
-                if (_didIteratorError3) {
-                    throw _iteratorError3;
-                }
-            }
-        }
+        });
     }
 
+    //初始化解析
     function eachText(elem) {
         var childs = elem.childNodes,
             watchers = lbind.$scope.$$watchers,
@@ -201,8 +202,7 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
             attrkey = void 0,
             attrvalue = void 0,
             resolve = void 0;
-        for (var i = 0; i < childs.length; i++) {
-            child = childs[i];
+        forOf(childs, function (child) {
             switch (child.nodeType) {
                 case NODE_TYPE_TEXT:
                     textContent = child.textContent;
@@ -224,117 +224,111 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
                 default:
                     eachText(child);
             }
-        }
+        });
     }
 
+    //解析花括号
     function resolveText(text, elem, key) {
         var m = text.match(/(?={{)(.+?)}}/g);
         var attr = void 0,
             value = void 0,
             oldresolve = text;
-        var _iteratorNormalCompletion4 = true;
-        var _didIteratorError4 = false;
-        var _iteratorError4 = undefined;
-
-        try {
-            for (var _iterator4 = m[Symbol.iterator](), _step4; !(_iteratorNormalCompletion4 = (_step4 = _iterator4.next()).done); _iteratorNormalCompletion4 = true) {
-                var v = _step4.value;
-
-                attr = v.match(/[^{^}]+/)[0];
-                value = objectGetValue(attr) || '';
-                if (elem) {
-                    createWatch(elem, value, oldresolve, v, getObject(attr), key, function () {
-                        var so = this.obj;
-                        return so.obj[so.key];
-                    }, function (v) {
-                        var elem = this.elem,
-                            value = resolveText(this.reg);
-                        switch (elem.nodeType) {
-                            case NODE_TYPE_TEXT:
-                                elem.textContent = value;
-                                break;
-                            case NODE_TYPE_ELEMENT:
-                                elem.setAttribute(this.key, value);
-                                break;
-                        }
-                        this.last = v;
-                        this.setLast();
-                    });
-                }
-                text = text.replace(v, value);
+        forOf(m, function (v) {
+            attr = v.match(/[^{^}]+/)[0];
+            value = objectGetValue(attr) || '';
+            if (elem) {
+                createWatch(elem, value, oldresolve, v, getObject(attr), key, function () {
+                    var so = this.obj;
+                    return so.obj[so.key];
+                }, function (v) {
+                    var elem = this.elem,
+                        value = resolveText(this.reg);
+                    switch (elem.nodeType) {
+                        case NODE_TYPE_TEXT:
+                            elem.textContent = value;
+                            break;
+                        case NODE_TYPE_ELEMENT:
+                            elem.setAttribute(this.key, value);
+                            break;
+                    }
+                    this.last = v;
+                    this.setLast();
+                });
             }
-        } catch (err) {
-            _didIteratorError4 = true;
-            _iteratorError4 = err;
-        } finally {
-            try {
-                if (!_iteratorNormalCompletion4 && _iterator4.return) {
-                    _iterator4.return();
-                }
-            } finally {
-                if (_didIteratorError4) {
-                    throw _iteratorError4;
-                }
-            }
-        }
-
+            text = text.replace(v, value);
+        });
         return text;
     }
 
+    //解析对象 
     function objectGetValue(o) {
         if (typeof o !== 'string') return null;
-        var attr = o.split('.');
-        var val = lbind.$scope[attr[0]];
-        for (var i in attr) {
-            if (typeof val === 'undefined' || val === null) return null;
-            if (i > 0) {
-                val = val[attr[i]];
+        var attr = o.split('.'),
+            arrReg = /([^\[]+)\[(\d)\]/;
+        var $scope = lbind.$scope;
+        forOf(attr, function (v, i) {
+            var k = v.match(arrReg);
+            if (k) {
+                $scope = $scope[k[1]][k[2]];
+            } else {
+                $scope = $scope[v];
             }
-        }
-        return val || '';
+            if (typeof $scope === "undefined" || $scope === null) return null;
+        });
+        return $scope || '';
     }
 
-    function objectSetValue(o, v) {
+    //通过字符串设置对象属性值
+    function objectSetValue(o, val) {
         if (typeof o !== 'string') return null;
-        var attr = o.split('.');
-        var val = lbind.$scope[attr[0]];
-        if ((typeof val === 'undefined' ? 'undefined' : _typeof(val)) !== 'object') {
-            lbind.$scope[attr[0]] = v;
-            return true;
-        }
-        for (var i in attr) {
-            if (i > 0) {
-                var obj = val[attr[i]];
-                if ((typeof obj === 'undefined' ? 'undefined' : _typeof(obj)) !== 'object') {
-                    val[attr[i]] = v;
-                    return true;
-                } else {
-                    val = obj;
+        var attr = o.split('.'),
+            arrReg = /([^\[]+)\[(\d)\]/,
+            attrLength = attr.length;
+        var $scope = lbind.$scope;
+        forOf(attr, function (v, i) {
+            var k = v.match(arrReg);
+            if (k) {
+                if (i == attrLength - 1) {
+                    $scope[k[1]][k[2]] = val;
+                    return false;
                 }
+                $scope = $scope[k[1]][k[2]];
+            } else {
+                if (i == attrLength - 1) {
+                    $scope[v] = val;
+                    return false;
+                }
+                $scope = $scope[v];
             }
-        }
-        return false;
+        });
+        return $scope;
     }
 
+    //获取对象
     function getObject(o) {
         if (typeof o !== 'string') return null;
         var attr = o.split('.'),
-            obj = void 0;
-        var val = lbind.$scope[attr[0]];
-        if ((typeof val === 'undefined' ? 'undefined' : _typeof(val)) !== 'object') {
-            return { obj: lbind.$scope, key: attr[0] };
-        }
-        for (var i in attr) {
-            if (i > 0) {
-                obj = val[attr[i]];
-                if ((typeof obj === 'undefined' ? 'undefined' : _typeof(obj)) !== 'object') {
-                    return { obj: val, key: attr[i] };
-                } else {
-                    val = obj;
+            obj = null,
+            arrReg = /([^\[]+)\[(\d)\]/,
+            attrLength = attr.length;
+        var $scope = lbind.$scope;
+        forOf(attr, function (v, i) {
+            var k = v.match(arrReg);
+            if (k) {
+                if (i == attrLength - 1) {
+                    obj = { obj: $scope[k[1]], key: k[2] };
+                    return false;
                 }
+                $scope = $scope[k[1]][k[2]];
+            } else {
+                if (i == attrLength - 1) {
+                    obj = { obj: $scope, key: v };
+                    return false;
+                }
+                $scope = $scope[v];
             }
-        }
-        return null;
+        });
+        return obj;
     }
 
     gb.bootEach = function (App) {

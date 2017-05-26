@@ -1,4 +1,18 @@
 (function(gb){
+    function copyObj(obj) {
+        var a = {};
+        for (var k in obj) {
+            if (isArray(obj[k])) {
+                a[k] = [];
+                for (var ki in obj[k]) {
+                    a[k].push(obj[k][ki]);
+                }
+            } else if (obj.hasOwnProperty(k)) {
+                a[k] = typeof obj[k] == 'object' ? copyObj(obj[k]) : obj[k];
+            }
+        }
+        return a;
+    }
     function forOf(o, fn, t, dc) {
         if (dc)
             o = copyObj(o);
@@ -8,6 +22,7 @@
         }
     }
 
+//
 var NODE_TYPE_TEXT = 3;
 var NODE_TYPE_ELEMENT = 1;
 
@@ -64,11 +79,13 @@ var NODE_TYPE_ELEMENT = 1;
                 watchers=this.$scope.$$watchers;
             forOf(lmodel_dom,function(v){
                 let attr=v.getAttribute('lmodel');
+                let wobj=getObject(attr);
+                console.log(wobj);
                 watchers.push({
                     last:v.value=objectGetValue(attr),
                     elem:v,
                     reg:attr,
-                    obj:getObject(attr),
+                    obj:wobj,
                     get:function(){
                         let obj=this.obj;
                         return obj.obj[obj.key];
@@ -78,12 +95,15 @@ var NODE_TYPE_ELEMENT = 1;
                     }
                 })
                 v.addEventListener('input',function(){
-                    objectSetValue(attr,this.value);
+                    wobj.obj[wobj.key]=this.value;
                     var DateTime=Date.now();
                     eachTexts(this);
                     console.log(Date.now()-DateTime);
                 });
             });
+        },
+        $lFor:function(){
+
         },
         $scope:{
             $$watchers:[]
@@ -96,6 +116,8 @@ var NODE_TYPE_ELEMENT = 1;
     }
 
     let $$watchers=lbind.$scope.$$watchers;
+
+    //创建数据监听
     function createWatch(elem,last,reg,cureg,obj,key,get,set){
         $$watchers.push({
             elem:elem,last:last,
@@ -112,24 +134,25 @@ var NODE_TYPE_ELEMENT = 1;
         })
     }
 
+    //监听数据变化
     function eachTexts(elem){
         let watchers=lbind.$scope.$$watchers,
             resolvetext;
-        for(let w of watchers){
+        forOf(watchers,function(w){
             resolvetext=w.get();
             if(resolvetext!==w.last&&elem!==w.elem){
                 w.set(resolvetext);
             }
-        }
+        })
     }
 
+    //初始化解析
     function eachText(elem){
         let childs=elem.childNodes,
             watchers=lbind.$scope.$$watchers,
             child,textContent,templateReg=/(?={{).+}}/,
             attrkey,attrvalue,resolve;
-        for(let i=0;i<childs.length;i++){
-            child=childs[i];
+        forOf(childs,function(child){
             switch(child.nodeType){
                 case NODE_TYPE_TEXT:
                     textContent=child.textContent;
@@ -151,13 +174,14 @@ var NODE_TYPE_ELEMENT = 1;
                 default:
                     eachText(child);
             }
-        }
+        });
     }
 
+    //解析花括号
     function resolveText(text,elem,key){
         let m=text.match(/(?={{)(.+?)}}/g);
         let attr,value,oldresolve=text;
-        for(let v of m){
+        forOf(m,(v)=>{
             attr=v.match(/[^{^}]+/)[0];
             value=objectGetValue(attr)||'';
             if(elem){
@@ -179,63 +203,78 @@ var NODE_TYPE_ELEMENT = 1;
                 })
             }
             text=text.replace(v,value);
-        }
+        })
         return text;
     }
 
+    //解析对象 
     function objectGetValue(o){
         if(typeof o !== 'string')return null;
-        let attr=o.split('.');
-        let val=lbind.$scope[attr[0]];
-        for(let i in attr){
-            if(typeof val==='undefined'||val===null)return null;
-            if(i>0){
-                val=val[attr[i]];
+        let attr=o.split('.'),
+        arrReg=/([^\[]+)\[(\d)\]/;
+        let $scope=lbind.$scope;
+        forOf(attr,function(v,i){
+            let k = v.match(arrReg);
+            if(k){
+                $scope=$scope[k[1]][k[2]];
+            }else{
+                $scope=$scope[v];
             }
-        }
-        return val||'';
+            if(typeof $scope==="undefined"||$scope===null)return null;
+        })
+        return $scope||'';
     }
 
-    function objectSetValue(o,v){
+    //通过字符串设置对象属性值
+    function objectSetValue(o,val){
         if(typeof o !== 'string')return null;
-        let attr=o.split('.');
-        let val=lbind.$scope[attr[0]];
-        if(typeof val!=='object'){
-            lbind.$scope[attr[0]]=v;
-            return true;
-        }
-        for(let i in attr){
-            if(i>0){
-                let obj=val[attr[i]];
-                if(typeof obj!=='object'){
-                    val[attr[i]]=v;
-                    return true;
-                }else{
-                    val=obj;
+        let attr=o.split('.'),
+        arrReg=/([^\[]+)\[(\d)\]/,
+        attrLength=attr.length;
+        let $scope=lbind.$scope;
+        forOf(attr,function(v,i){
+            let k = v.match(arrReg);
+            if(k){
+                if(i==attrLength-1){
+                    $scope[k[1]][k[2]]=val;
+                    return false;
                 }
+                $scope=$scope[k[1]][k[2]];
+            }else{
+                if(i==attrLength-1){
+                    $scope[v]=val;
+                    return false;
+                }
+                $scope=$scope[v];
             }
-        }
-        return false;
+        })
+        return $scope;
     }
 
+    //获取对象
     function getObject(o){
         if(typeof o !== 'string')return null;
-        let attr=o.split('.'), obj;
-        let val=lbind.$scope[attr[0]];
-        if(typeof val!=='object'){
-            return {obj:lbind.$scope,key:attr[0]};
-        }
-        for(let i in attr){
-            if(i>0){
-                obj=val[attr[i]];
-                if(typeof obj!=='object'){
-                    return {obj:val,key:attr[i]};
-                }else{
-                    val=obj;
+        let attr=o.split('.'), obj=null,
+        arrReg=/([^\[]+)\[(\d)\]/,
+        attrLength=attr.length;
+        let $scope=lbind.$scope;
+        forOf(attr,function(v,i){
+            let k = v.match(arrReg);
+            if(k){
+                if(i==attrLength-1){
+                    obj={obj:$scope[k[1]],key:k[2]};
+                    return false;
                 }
+                $scope=$scope[k[1]][k[2]];
+            }else{
+                if(i==attrLength-1){
+                    obj={obj:$scope,key:v};
+                    return false;
+                }
+                $scope=$scope[v];
             }
-        }
-        return null;
+        })
+        return obj;
     }
     
     gb.bootEach=function(App){
