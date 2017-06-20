@@ -9,27 +9,39 @@
     <script src="../javascripts/index.js"></script>
 </head>
 <body>
-    <div id="App" class="">
-        <input type="text" lmodel="abc.arr[1]">
-        <input type="text" lmodel="hehe">
+    <div id="App" ll-app class="">
+        <input type="text" llmodel="abc.dc[0][0]">
+        <input type="text" llmodel="hehe">
         <span id="hh" kkk="{{hehe}} {{hehe}} {{abc.ss}}"></span>
-        <span>{{abc.ss}}</span>
         <div>{{hehe}}</div>
-        <div l-For="ch in abc.arr">
-            {{abc.arr[1]}}
+        <span>{{abc.ss}}</span>
+        <div>{{abc.arr[1]}}</div>
+        <button llevent="click:haha()&mouseover:ggg()">按钮</button>
+        <div ll-for="ch in abc.dc of k">
+            {{ch[0]}}
+            <span ll-for="abc in ch">
+                {{abc}}
+            </span>
         </div>
     </div>
 </body>
 <script>
-    var app=document.getElementById('App');
-    var scope=lbind.$scope;
+    //var app=document.getElementById('App');
+    var scope=llbind.$scope;
     scope.hh="------啊实打实------";
     scope.hehe="123撒旦法千万请问驱蚊器为123";
     scope.abc={
         ss:'我饿哦--',
-        arr:[{gg:['hehe']},"321","hehehe"]
+        arr:[{gg:['hehe']},"321","hehehe"],
+        dc:[[66],[11]]
     }
     scope.user={};
+    scope.haha=function(){
+        scope.hehe=123123;
+    }
+    scope.ggg=function(){
+        scope.hehe="kkkkkkkk";
+    }
     //scope.www="oooooooo";
     /*scope.abc=function(a){
         console.log(scope.user);
@@ -41,6 +53,6 @@
         lbind.$scope.www=this.value;
     }*/
     window.onload=function(){};
-    bootEach(app);
+    //bootEach(app);
 </script>
 </html>

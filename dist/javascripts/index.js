@@ -3,6 +3,9 @@
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
 (function (gb) {
+    function isArray(obj) {
+        return Object.prototype.toString.call(obj) === '[object Array]';
+    }
     function copyObj(obj) {
         var a = {};
         for (var k in obj) {
@@ -21,139 +24,187 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
         if (dc) o = copyObj(o);
         t = t || this;
         for (var k in o) {
-            if (!o.hasOwnProperty(k) || fn.call(t, o[k], k) == false) break;
+            if (!o.hasOwnProperty(k) || fn.call(t, o[k], k) == false) return false;
         }
+        return true;
     }
 
+    function isObject(value) {
+        return value !== null && (typeof value === 'undefined' ? 'undefined' : _typeof(value)) === 'object';
+    }
+
+    function createComment(directiveName, comment) {
+        var content = '';
+        content = ' ' + (directiveName || '') + ': ';
+        if (comment) content += comment + ' ';
+        return window.document.createComment(content);
+    };
+
+    function elemAddBefore(_this, elem) {
+        if (_this.parentNode) {
+            _this.parentNode.insertBefore(elem, _this);
+        }
+    }
+    function elemAddAfter(_this, elem) {
+        if (_this.parentNode) {
+            _this.parentNode.insertBefore(elem, _this.nextSibling);
+        }
+    }
+    function sibling(cur, dir) {
+        while ((cur = cur[dir]) && cur.nodeType !== 1) {}
+        return cur;
+    }
+    function nextElemt(elem) {
+        return sibling(elem, "nextSibling");
+    }
+
+    function createScope() {
+        var $$scope = function $$scope() {
+            this.$$watchers = [];
+            this.$apply = eachTexts;
+            this.$index = 0;
+            this.$parentScope = this.$childHeadScope = this.$childLastScope = this.$nextScope = this.$prevScope = null;
+        };
+        $$scope.prototype = {
+            addChildScope: function addChildScope(scope) {
+                if (this.$childHeadScope) {
+                    var lastScope = this.$childLastScope;
+                    lastScope.$nextScope = scope;
+                    scope.$prevScope = lastScope;
+                    this.$childLastScope = scope;
+                } else {
+                    this.$childHeadScope = scope;
+                    this.$childLastScope = scope;
+                }
+                scope.$parentScope = this;
+            }
+        };
+        return new $$scope();
+    }
+
+    function removeScope(scope) {
+        var prevScope = scope.$prevScope;
+        var nextScope = scope.$nextScope;
+        var parentScope = scope.$parentScope;
+        if (prevScope && nextScope) {
+            prevScope.$nextScope = nextScope;
+            nextScope.$prevScope = prevScope;
+        } else if (!prevScope && !nextScope) {
+            parentScope.$childHeadScope = null;
+            parentScope.$childLastScope = null;
+        } else if (!nextScope) {
+            prevScope.$nextScope = null;
+            parentScope.$childLastScope = prevScope;
+        } else if (!prevScope) {
+            nextScope.$prevScope = null;
+            parentScope.$childHeadScope = nextScope;
+        }
+        return scope;
+    }
     //
     var NODE_TYPE_TEXT = 3;
     var NODE_TYPE_ELEMENT = 1;
+    var NODE_TYPE_COMMENT = 8;
+    var llFors = {};
 
-    var lbind = {
+    var llbind = {
         $bind: function $bind() {
+            this.$llFor();
+            this.$llmodel();
             this.$event();
-            this.$lmodel();
         },
         $event: function $event() {
-            var levent_dom = document.querySelectorAll('[levent]'),
+            var levent_dom = document.querySelectorAll('[llevent]'),
                 _this = this;
             forOf(levent_dom, function (v) {
-                var attrs = v.getAttribute('levent').split('&');
-                var _iteratorNormalCompletion = true;
-                var _didIteratorError = false;
-                var _iteratorError = undefined;
-
-                try {
-                    var _loop = function _loop() {
-                        var attr = _step.value;
-
-                        var events = attr.split(":")[0].split("~"),
-                            fn = attr.split(":")[1],
-                            fnName = fn.match(/([\w\d]+)\(/)[1],
-                            args = fn.match(/\(([^\)]+)\)/);
-                        if (args) args = args[1].split(",");
-                        v.removeAttribute('levent');
-                        var _iteratorNormalCompletion2 = true;
-                        var _didIteratorError2 = false;
-                        var _iteratorError2 = undefined;
-
-                        try {
-                            for (var _iterator2 = events[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
-                                var event = _step2.value;
-
-                                v.addEventListener(event, function (e) {
-                                    for (var i in args) {
-                                        var arg = args[i];
-                                        if (arg === "$event") {
-                                            args[i] = e;
-                                            continue;
-                                        }
-                                        if (!isNaN(parseInt(arg))) {
-                                            args[i] = parseInt(arg);
-                                            continue;
-                                        }
-
-                                        if (!/^['"]/.test(arg)) {
-                                            var bindval = objectGetValue(arg);
-                                            if (bindval) args[i] = bindval;
-                                        } else {
-                                            args[i] = arg.replace(/^['"]/, '').replace(/['"]$/, '');
-                                        }
-                                    }
-                                    var fnReturn = _this.$scope[fnName].apply(this, args);
-                                    eachTexts(this);
-                                    return fnReturn;
-                                });
-                            }
-                        } catch (err) {
-                            _didIteratorError2 = true;
-                            _iteratorError2 = err;
-                        } finally {
-                            try {
-                                if (!_iteratorNormalCompletion2 && _iterator2.return) {
-                                    _iterator2.return();
+                var attrs = v.getAttribute('llevent').split('&');
+                forOf(attrs, function (attr) {
+                    var events = attr.split(":")[0].split("~"),
+                        fn = attr.split(":")[1],
+                        fnName = fn.match(/([\w\d]+)\(/)[1],
+                        args = fn.match(/\(([^\)]+)\)/);
+                    if (args) args = args[1].split(",");
+                    v.removeAttribute('llevent');
+                    forOf(events, function (event) {
+                        v.addEventListener(event, function (e) {
+                            var cargs = void 0;
+                            if (isArray(args)) cargs = args.slice(0);else cargs = [];
+                            forOf(cargs, function (a, i) {
+                                var arg = cargs[i];
+                                if (arg === "$event") {
+                                    cargs[i] = e;
+                                    return true;
                                 }
-                            } finally {
-                                if (_didIteratorError2) {
-                                    throw _iteratorError2;
+                                if (!isNaN(parseInt(arg))) {
+                                    cargs[i] = parseInt(arg);
+                                    return true;
                                 }
-                            }
-                        }
-                    };
 
-                    for (var _iterator = attrs[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-                        _loop();
-                    }
-                } catch (err) {
-                    _didIteratorError = true;
-                    _iteratorError = err;
-                } finally {
-                    try {
-                        if (!_iteratorNormalCompletion && _iterator.return) {
-                            _iterator.return();
-                        }
-                    } finally {
-                        if (_didIteratorError) {
-                            throw _iteratorError;
-                        }
-                    }
-                }
+                                if (!/^['"]/.test(arg)) {
+                                    var bindval = objectGetValue(arg);
+                                    if (bindval) cargs[i] = bindval;
+                                } else {
+                                    cargs[i] = arg.replace(/^['"]/, '').replace(/['"]$/, '');
+                                }
+                            });
+                            var fnReturn = _this.$scope[fnName].apply(this, cargs);
+                            eachTexts(this);
+                            return fnReturn;
+                        });
+                    });
+                });
             });
         },
-        $lmodel: function $lmodel() {
-            var lmodel_dom = document.querySelectorAll('[lmodel]'),
+        $llmodel: function $llmodel() {
+            var lmodel_dom = document.querySelectorAll('[llmodel]'),
                 _this = this,
                 inps = this.$elems.inps,
                 watchers = this.$scope.$$watchers;
-            forOf(lmodel_dom, function (v) {
-                var attr = v.getAttribute('lmodel');
+            forOf(lmodel_dom, function (elem) {
+                var attr = elem.getAttribute('llmodel');
                 var wobj = getObject(attr);
-                console.log(wobj);
-                watchers.push({
-                    last: v.value = objectGetValue(attr),
-                    elem: v,
-                    reg: attr,
-                    obj: wobj,
-                    get: function get() {
-                        var obj = this.obj;
-                        return obj.obj[obj.key];
-                    },
-                    set: function set(v) {
-                        this.last = this.elem.value = v;
-                    }
+                elem.value = wobj.obj[wobj.key];
+                createWatch(wobj, function (v) {
+                    this.last = v;
+                    if (elem.value != v) elem.value = v;
                 });
-                v.addEventListener('input', function () {
+                elem.addEventListener('input', function () {
                     wobj.obj[wobj.key] = this.value;
-                    var DateTime = Date.now();
-                    eachTexts(this);
-                    console.log(Date.now() - DateTime);
+                    //var DateTime=Date.now();
+                    eachTexts();
+                    //console.log(Date.now()-DateTime);
                 });
             });
         },
-        $lFor: function $lFor() {},
-        $scope: {
-            $$watchers: []
+        $llFor: function $llFor(args) {
+            // let for_doms=args||document.querySelectorAll('[ll-For]'),
+            //     $scope=this.$scope;
+            // forOf(for_doms,(for_dom)=>{
+            //     let match=for_dom.getAttribute("ll-For").match(/^\s*([\s\S]+?)\s+in\s+([\s\S]+?)(?:\s+of\s+([\s\S]+?))?(?:\s+track\s+by\s+([\s\S]+?))?\s*$/);
+            //     console.log(match);
+            //     let fordom=for_dom.cloneNode(true);
+            //     let object={
+            //         fhs: match[0],
+            //         lhs: match[1],
+            //         rhs: match[2],
+            //         askey: match[3],
+            //         fordom: fordom
+            //     };
+            //     let forComment=createComment("llFor",object.fhs);
+            //     elemAddBefore(for_dom,forComment);
+            //     //let val=$scope.$forScope[lhs]=object.obj[object.key];
+            //     llFors[forComment.textContent]=object;
+            //     for_dom.remove();
+            //     /*if(!val)return;
+            //     for(var i = 0; i<val.length;i++){
+            //         elemAddAfter(forComment,fordom);
+            //         elemAddAfter(fordom,createComment("end llFor",fhs));
+            //         fordom=fordom.cloneNode(true);
+            //     }*/
+            //     //let rg
+            // });
         },
+        $scope: createScope(),
         $elems: {
             texts: [],
             inps: [],
@@ -161,17 +212,21 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
         }
     };
 
-    var $$watchers = lbind.$scope.$$watchers;
-
+    var $$watchers = llbind.$scope.$$watchers;
+    var $currentScope = llbind.$scope;
     //创建数据监听
-    function createWatch(elem, last, reg, cureg, obj, key, get, set) {
+    function createWatch(obj, set) {
         $$watchers.push({
-            elem: elem, last: last,
-            reg: reg, cureg: cureg, obj: obj,
-            key: key, get: get, set: set,
+            last: obj.obj[obj.key],
+            get: function get() {
+                return obj.obj[obj.key];
+            },
+            exp: function exp() {
+                return this.get() === this.last;
+            }, set: set,
             setLast: function setLast() {
                 var next = $$watchers[this.index + 1];
-                if (next && next.cureg === this.cureg && next.elem === this.elem) {
+                if (next.get() == this.last) {
                     next.last = this.last;
                     return next.setLast();
                 }
@@ -180,27 +235,60 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
         });
     }
 
-    //监听数据变化
-    function eachTexts(elem) {
-        var watchers = lbind.$scope.$$watchers,
-            resolvetext = void 0;
-        forOf(watchers, function (w) {
-            resolvetext = w.get();
-            if (resolvetext !== w.last && elem !== w.elem) {
-                w.set(resolvetext);
+    function createWatchCollection(obj, set) {
+        var newValue,
+            oldValue = obj.obj[obj.key],
+            internalArray = [];
+        $$watchers.push({
+            get: function get() {
+                return obj.obj[obj.key];
+            },
+            exp: function exp() {
+                newValue = this.get();
+                if ((typeof oldValue === 'undefined' ? 'undefined' : _typeof(oldValue)) != 'object') return newValue === oldValue;
+                return forOf(newValue, function (v, i) {
+                    if (v !== oldValue[i]) {
+                        oldValue = newValue;
+                        return false;
+                    }
+                });
+            },
+            set: function set(v) {
+                console.log(v);
             }
         });
+    }
+
+    //判断并处理数据变化
+    function eachTexts() {
+        var $scope = llbind.$scope; //let $scope=scope || llbind.$scope;
+        do {
+            var watchers = $scope.$$watchers;
+            forOf(watchers, function (w) {
+                if (!w.exp()) {
+                    w.set(w.get());
+                }
+            });
+
+            var childScope = $scope.$childHeadScope,
+                nextScope = $scope.$nextScope;
+            if (childScope) $scope = childScope;else if (nextScope) $scope = nextScope;else {
+                while (!nextScope && $scope !== llbind.$scope) {
+                    $scope = $scope.$parentScope;
+                    nextScope = $scope.$nextScope;
+                }
+                $scope = nextScope;
+            }
+        } while ($scope);
     }
 
     //初始化解析
     function eachText(elem) {
         var childs = elem.childNodes,
-            watchers = lbind.$scope.$$watchers,
+            watchers = llbind.$scope.$$watchers,
             child = void 0,
             textContent = void 0,
             templateReg = /(?={{).+}}/,
-            attrkey = void 0,
-            attrvalue = void 0,
             resolve = void 0;
         forOf(childs, function (child) {
             switch (child.nodeType) {
@@ -211,15 +299,7 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
                     }
                     break;
                 case NODE_TYPE_ELEMENT:
-                    forOf(child.attributes, function (v) {
-                        textContent = v.value;
-                        if (templateReg.test(textContent)) {
-                            attrkey = v.name;
-                            attrvalue = resolveText(textContent, child, attrkey);
-                            child.setAttribute(attrkey, attrvalue);
-                        }
-                    });
-                    eachText(child);
+                    if (!resolveAttr(child)) eachText(child);
                     break;
                 default:
                     eachText(child);
@@ -232,23 +312,21 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
         var m = text.match(/(?={{)(.+?)}}/g);
         var attr = void 0,
             value = void 0,
-            oldresolve = text;
+            oldresolve = text,
+            resolveObject = void 0;
         forOf(m, function (v) {
             attr = v.match(/[^{^}]+/)[0];
             value = objectGetValue(attr) || '';
+            resolveObject = getObject(attr);
             if (elem) {
-                createWatch(elem, value, oldresolve, v, getObject(attr), key, function () {
-                    var so = this.obj;
-                    return so.obj[so.key];
-                }, function (v) {
-                    var elem = this.elem,
-                        value = resolveText(this.reg);
+                createWatch(getObject(attr), function (v) {
+                    var value = resolveText(oldresolve);
                     switch (elem.nodeType) {
                         case NODE_TYPE_TEXT:
                             elem.textContent = value;
                             break;
                         case NODE_TYPE_ELEMENT:
-                            elem.setAttribute(this.key, value);
+                            elem.setAttribute(key, value);
                             break;
                     }
                     this.last = v;
@@ -260,12 +338,94 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
         return text;
     }
 
+    //解析属性
+    function resolveAttr(elem) {
+        var isFor = false;
+        var attrkey = void 0,
+            attrvalue = void 0,
+            text = void 0,
+            templateReg = /(?={{).+}}/;
+        forOf(elem.attributes, function (v) {
+            attrkey = v.name;
+            text = v.value;
+            /*if(attrkey==='ll-for'){
+                addllFors(elem,text);
+                isFor=true;
+                return false;
+            }*/
+            if (templateReg.test(text)) {
+                attrvalue = resolveText(text, elem, attrkey);
+                elem.setAttribute(attrkey, attrvalue);
+            }
+        });
+        return isFor;
+    }
+
+    //初始化循环解析
+    function eachFors(elem, asName, asObj) {}
+    /*if(elem.nodeType===NODE_TYPE_ELEMENT){
+        forOf(elem.attributes,function(v){
+            //attrkey
+        })
+    }*/
+
+
+    //添加循环解析
+    function addllFors() {
+        var for_doms = document.querySelectorAll('[ll-For]');
+        forOf(for_doms, function (for_dom) {
+            var attrValue = for_dom.getAttribute('ll-for');
+            var match = attrValue.match(/^\s*([\s\S]+?)\s+in\s+([\s\S]+?)(?:\s+of\s+([\s\S]+?))?(?:\s+track\s+by\s+([\s\S]+?))?\s*$/);
+            var fordom = for_dom.cloneNode(true);
+            var object = {
+                fhs: match[0],
+                lhs: match[1],
+                rhs: match[2],
+                askey: match[3],
+                fordom: fordom
+            };
+            var forComment = createComment("llFor", object.fhs);
+            elemAddBefore(for_dom, forComment);
+            //let val=$scope.$forScope[lhs]=object.obj[object.key];
+            llFors[forComment.textContent] = object;
+            for_dom.remove();
+            /*if(!val)return;
+            for(var i = 0; i<val.length;i++){
+                elemAddAfter(forComment,fordom);
+                elemAddAfter(fordom,createComment("end llFor",fhs));
+                fordom=fordom.cloneNode(true);
+            }*/
+        });
+    }
+
+    function resolveFor() {
+        forOf(llFors, function (resolveObject) {
+            var lhs = resolveObject.lhs,
+                rhs = resolveObject.rhs;
+            createWatch(getObject(rhs), function (v) {
+                console.log(v);
+            });
+        });
+        /*let resolveObject=llFors[comment.textContent],
+            val=getObject(resolveObject.rhs,$currentScope),
+            fordom=resolveObject.fordom.cloneNode(true),
+            lhs=resolveObject.lhs,rhs=resolveObject.rhs;
+        fordom.removeAttribute('ll-for');
+        forOf(val.obj[val.key],function(v,i){
+            elemAddAfter(comment,fordom);
+            elemAddAfter(fordom,createComment("end llFor",resolveObject.fhs));
+            let temp=fordom;
+            fordom=temp.cloneNode(true);
+            eachText(temp,lhs,rhs+'['+i+']');
+        });*/
+    }
+
     //解析对象 
-    function objectGetValue(o) {
+    function objectGetValue(o, s) {
         if (typeof o !== 'string') return null;
         var attr = o.split('.'),
             arrReg = /([^\[]+)\[(\d)\]/;
-        var $scope = lbind.$scope;
+        var $scope = s || llbind.$scope;
         forOf(attr, function (v, i) {
             var k = v.match(arrReg);
             if (k) {
@@ -279,12 +439,12 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
     }
 
     //通过字符串设置对象属性值
-    function objectSetValue(o, val) {
+    function objectSetValue(o, val, s) {
         if (typeof o !== 'string') return null;
         var attr = o.split('.'),
             arrReg = /([^\[]+)\[(\d)\]/,
             attrLength = attr.length;
-        var $scope = lbind.$scope;
+        var $scope = s || llbind.$scope;
         forOf(attr, function (v, i) {
             var k = v.match(arrReg);
             if (k) {
@@ -305,13 +465,13 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
     }
 
     //获取对象
-    function getObject(o) {
+    function getObject(o, s) {
         if (typeof o !== 'string') return null;
         var attr = o.split('.'),
             obj = null,
             arrReg = /([^\[]+)\[(\d)\]/,
             attrLength = attr.length;
-        var $scope = lbind.$scope;
+        var $scope = s || llbind.$scope;
         forOf(attr, function (v, i) {
             var k = v.match(arrReg);
             if (k) {
@@ -332,9 +492,16 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
     }
 
     gb.bootEach = function (App) {
+        addllFors();
+        llbind.$bind();
         eachText(App);
-        lbind.$bind();
+        resolveFor();
+        eachTexts();
     };
-    gb.lbind = lbind;
+
+    window.addEventListener('load', function () {
+        bootEach(document.querySelector('[ll-app]'));
+    });
+    gb.llbind = llbind;
     gb.eachTexts = eachTexts;
 })(window);
